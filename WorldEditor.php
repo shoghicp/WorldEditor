@@ -65,12 +65,12 @@ class WorldEditor implements Plugin{
 		switch($event){
 			case "player.block.touch":
 				if($data["item"]->getID() == $this->config["wand-item"]){
-					if($data["type"] === "break"){
+					if($data["type"] == "break"){
 						$this->setPosition1($data["player"], $data["target"], $output);
 					}else{
 						$this->setPosition2($data["player"], $data["target"], $output);
 					}
-					$this->server->api->chat->sendTo(false, $output, $data["player"]->username);
+					$this->api->chat->sendTo(false, $output, $data["player"]->username);
 					return false;
 				}
 				break;
