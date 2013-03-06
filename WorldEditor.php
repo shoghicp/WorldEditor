@@ -21,6 +21,8 @@ Small Changelog
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
 - Added //limit, //desel
+- Separated selections for each player
+- In-game selection mode
 
 
 */
@@ -28,22 +30,22 @@ Small Changelog
 
 
 class WorldEditor implements Plugin{
-	private $api, $pos1, $pos2, $path, $config;
+	private $api, $selections, $path, $config;
 	public function __construct(ServerAPI $api, $server = false){
 		$this->api = $api;
 		$this->limit = -1;
-		$this->pos1 = false;
-		$this->pos2 = false;
+		$this->selections = array();
 	}
 	
 	public function init(){
 		$this->path = $this->api->plugin->createConfig($this, array(
-			"target-player" => false, //player ingame
 			"block-limit" => -1,
+			"wand-item" => 247, //Nether Reactor
 		));
 		$this->config = $this->api->plugin->readYAML($this->path."config.yml");
 		$this->limit = $this->config["block-limit"];
 		
+		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands", array($this, "command"));
 		$this->api->console->alias("/limit", "/");
 		$this->api->console->alias("/desel", "/");
@@ -58,6 +60,53 @@ class WorldEditor implements Plugin{
 
 	}
 	
+	public function selectionHandler($data, $event){
+		$output = "";
+		switch($event){
+			case "player.block.touch":
+				if($data["item"]->getID() == $this->config["wand-item"]){
+					if($data["type"] === "break"){
+						$this->setPosition1($data["player"], $data["target"], $output);
+					}else{
+						$this->setPosition2($data["player"], $data["target"], $output);
+					}
+					$this->server->api->chat->sendTo(false, $output, $data["player"]->username);
+					return false;
+				}
+				break;
+		}
+	}
+	
+	public function setPosition1($issuer, Vector3 $position, &$output){
+		if(!isset($this->selections[$issuer->username])){
+			$this->selections[$issuer->username] = array(false, false);
+		}		
+		$this->selections[$issuer->username][0] = array(round($position->x), round($position->y), round($position->z));
+		$count = $this->countBlocks($this->selections[$issuer->username]);
+		if($count === false){
+			$count = "";
+		}else{
+			$count = " ($count)";
+		}
+		$output .= "First position set to (".$this->selections[$issuer->username][0][0].", ".$this->selections[$issuer->username][0][1].", ".$this->selections[$issuer->username][0][2].")$count.\n";
+		return true;
+	}
+	
+	public function setPosition2($issuer, Vector3 $position, &$output){
+		if(!isset($this->selections[$issuer->username])){
+			$this->selections[$issuer->username] = array(false, false);
+		}		
+		$this->selections[$issuer->username][1] = array(round($position->x), round($position->y), round($position->z));
+		$count = $this->countBlocks($this->selections[$issuer->username]);
+		if($count === false){
+			$count = "";
+		}else{
+			$count = " ($count)";
+		}
+		$output .= "Second position set to (".$this->selections[$issuer->username][1][0].", ".$this->selections[$issuer->username][1][1].", ".$this->selections[$issuer->username][1][2].")$count.\n";
+		return true;
+	}
+	
 	public function command($cmd, $params, $issuer, $alias){
 		$output = "";
 		if($alias !== false){
@@ -70,8 +119,11 @@ class WorldEditor implements Plugin{
 		}
 		switch($cmd){
 			case "desel":
-				$this->pos1 = false;
-				$this->pos2 = false;
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				unset($this->selections[$issuer->username]);
 				$output = "Selection cleared.\n";
 				break;
 			case "limit":
@@ -89,48 +141,24 @@ class WorldEditor implements Plugin{
 				$output .= "Block limit set to ".($this->limit === -1 ? "infinite":$this->limit)." block(s).\n";
 				break;
 			case "pos1":
-				if($issuer instanceof Player){
-					$target = $issuer->username;
-				}else{
-					$target = trim(implode(" ", $params));
-					$target = $target != "" ? $target:$this->config["target-player"];
-				}
-				
-				if(($player = $this->api->player->get($target)) !== false){
-					$this->pos1 = array(round($player->entity->x - 0.5), round($player->entity->y), round($player->entity->z - 0.5));
-					$count = $this->countBlocks();
-					if($count === false){
-						$count = "";
-					}else{
-						$count = " ($count)";
-					}
-					$output .= "First position set to (".$this->pos1[0].", ".$this->pos1[1].", ".$this->pos1[2].")$count.\n";
-				}else{
-					$output .= "Target player ".$target." is not connected.\n";
-				}
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}				
+				$this->setPosition1($issuer, new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
 				break;
 			case "pos2":
-				if($issuer instanceof Player){
-					$target = $issuer->username;
-				}else{
-					$target = trim(implode(" ", $params));
-					$target = $target != "" ? $target:$this->config["target-player"];
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
 				}
-				
-				if(($player = $this->api->player->get($target)) !== false){
-					$this->pos2 = array(round($player->entity->x - 0.5), round($player->entity->y), round($player->entity->z - 0.5));
-					$count = $this->countBlocks();
-					if($count === false){
-						$count = "";
-					}else{
-						$count = " ($count)";
-					}
-					$output .= "Second position set to (".$this->pos2[0].", ".$this->pos2[1].", ".$this->pos2[2].")$count.\n";
-				}else{
-					$output .= "Target player ".$target." is not connected.\n";
-				}
+				$this->setPosition2($issuer, new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
 				break;
 			case "set":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
 				$items = BlockAPI::fromString($params[0], true);
 				foreach($items as $item){
 					if($item->getID() > 0xff){
@@ -138,9 +166,13 @@ class WorldEditor implements Plugin{
 						return $output;
 					}
 				}
-				$this->W_set($items, $output);
+				$this->W_set($this->selections[$issuer->username], $items, $output);
 				break;
 			case "replace":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
 				$item1 = BlockAPI::fromString($params[0]);
 				if($item1->getID() > 0xff){
 					$output .= "Incorrect target block.\n";
@@ -154,41 +186,41 @@ class WorldEditor implements Plugin{
 					}
 				}
 				
-				$this->W_replace($item1, $items2, $output);
+				$this->W_replace($this->selections[$issuer->username], $item1, $items2, $output);
 				break;
 			default:
 			case "help":
-				$output .= "Commands: //pos1, //pos2, //set, //replace, //help\n";
+				$output .= "Commands: //desel, //limit, //pos1, //pos2, //set, //replace, //help\n";
 				break;
 		}
 		return $output;
 	}
 	
-	private function countBlocks(){
-		if($this->pos1 === false or $this->pos2 === false){
+	private function countBlocks($selection){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
 			return false;
 		}	
-		$startX = min($this->pos1[0], $this->pos2[0]);
-		$endX = max($this->pos1[0], $this->pos2[0]);
-		$startY = min($this->pos1[1], $this->pos2[1]);
-		$endY = max($this->pos1[1], $this->pos2[1]);
-		$startZ = min($this->pos1[2], $this->pos2[2]);
-		$endZ = max($this->pos1[2], $this->pos2[2]);
+		$startX = min($selection[0][0], $selection[1][0]);
+		$endX = max($selection[0][0], $selection[1][0]);
+		$startY = min($selection[0][1], $selection[1][1]);
+		$endY = max($selection[0][1], $selection[1][1]);
+		$startZ = min($selection[0][2], $selection[1][2]);
+		$endZ = max($selection[0][2], $selection[1][2]);
 		return ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
 	}
 	
-	private function W_set($blocks, &$output = null){
-		if($this->pos1 === false or $this->pos2 === false){
+	private function W_set($selection, $blocks, &$output = null){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
 			$output .= "Make a selection first\n";
 			return false;
 		}
 		$bcnt = count($blocks) - 1;
-		$startX = min($this->pos1[0], $this->pos2[0]);
-		$endX = max($this->pos1[0], $this->pos2[0]);
-		$startY = min($this->pos1[1], $this->pos2[1]);
-		$endY = max($this->pos1[1], $this->pos2[1]);
-		$startZ = min($this->pos1[2], $this->pos2[2]);
-		$endZ = max($this->pos1[2], $this->pos2[2]);
+		$startX = min($selection[0][0], $selection[1][0]);
+		$endX = max($selection[0][0], $selection[1][0]);
+		$startY = min($selection[0][1], $selection[1][1]);
+		$endY = max($selection[0][1], $selection[1][1]);
+		$startZ = min($selection[0][2], $selection[1][2]);
+		$endZ = max($selection[0][2], $selection[1][2]);
 		$count = ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
 		if($this->limit > 0 and $count > $this->limit){
 			$output .= "Block limit of ".$this->limit." exceeded, tried to change $count block(s).\n";
@@ -206,8 +238,8 @@ class WorldEditor implements Plugin{
 		return true;
 	}
 	
-	private function W_replace(Item $block1, $blocks2, &$output = null){
-		if($this->pos1 === false or $this->pos2 === false){
+	private function W_replace($selection, Item $block1, $blocks2, &$output = null){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
 			$output .= "Make a selection first\n";
 			return false;
 		}
@@ -217,12 +249,12 @@ class WorldEditor implements Plugin{
 		
 		$bcnt2 = count($blocks2) - 1;
 		
-		$startX = min($this->pos1[0], $this->pos2[0]);
-		$endX = max($this->pos1[0], $this->pos2[0]);
-		$startY = min($this->pos1[1], $this->pos2[1]);
-		$endY = max($this->pos1[1], $this->pos2[1]);
-		$startZ = min($this->pos1[2], $this->pos2[2]);
-		$endZ = max($this->pos1[2], $this->pos2[2]);
+		$startX = min($selection[0][0], $selection[1][0]);
+		$endX = max($selection[0][0], $selection[1][0]);
+		$startY = min($selection[0][1], $selection[1][1]);
+		$endY = max($selection[0][1], $selection[1][1]);
+		$startZ = min($selection[0][2], $selection[1][2]);
+		$endZ = max($selection[0][2], $selection[1][2]);
 		$count = 0;
 		for($x = $startX; $x <= $endX; ++$x){
 			for($y = $startY; $y <= $endY; ++$y){
