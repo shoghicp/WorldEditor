@@ -20,7 +20,7 @@ Small Changelog
 0.5:
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
-- Added //limit, //desel
+- Added //limit, //desel, //wand
 - Separated selections for each player
 - In-game selection mode
 
@@ -40,13 +40,14 @@ class WorldEditor implements Plugin{
 	public function init(){
 		$this->path = $this->api->plugin->createConfig($this, array(
 			"block-limit" => -1,
-			"wand-item" => 247, //Nether Reactor
+			"wand-item" => IRON_HOE,
 		));
 		$this->config = $this->api->plugin->readYAML($this->path."config.yml");
 		$this->limit = $this->config["block-limit"];
 		
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands", array($this, "command"));
+		$this->api->console->alias("/wand", "/");
 		$this->api->console->alias("/limit", "/");
 		$this->api->console->alias("/desel", "/");
 		$this->api->console->alias("/pos1", "/");
@@ -118,6 +119,21 @@ class WorldEditor implements Plugin{
 			$output .= "Bad command\n";
 		}
 		switch($cmd){
+			case "wand":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				if($issuer->hasItem($this->config["wand-item"])){
+					$output .= "You already have the wand item.\n";
+					break;
+				}elseif($issuer->gamemode === CREATIVE){
+					$output .= "You are on creative mode.\n";
+				}else{
+					$this->api->block->drop(new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), BlockAPI::getItem($this->config["wand-item"]));
+				}
+				$output .= "Break a block to set the #1 position, place for the #1.\n";
+				break;
 			case "desel":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
