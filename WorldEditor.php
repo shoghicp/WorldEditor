@@ -18,6 +18,7 @@ Small Changelog
 - Alpha_1.2 compatible release
 
 0.5:
+- Alpha_1.3dev compatible release
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
 - Added //limit, //desel, //wand
@@ -65,7 +66,7 @@ class WorldEditor implements Plugin{
 		$output = "";
 		switch($event){
 			case "player.block.touch":
-				if($data["item"]->getID() == $this->config["wand-item"]){
+				if($data["item"]->getID() == $this->config["wand-item"] and $this->api->ban->isOp($data["player"]->username)){
 					if($data["type"] == "break"){
 						$this->setPosition1($data["player"], $data["target"], $output);
 					}else{
