@@ -21,9 +21,10 @@ Small Changelog
 - Alpha_1.3dev compatible release
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
-- Added //limit, //desel, //wand
+- Added //limit, //desel, //wand, /toggleeditwand
 - Separated selections for each player
 - In-game selection mode
+- Sessions
 
 
 */
@@ -31,11 +32,10 @@ Small Changelog
 
 
 class WorldEditor implements Plugin{
-	private $api, $selections, $path, $config;
+	private $api, $sessions, $path, $config;
 	public function __construct(ServerAPI $api, $server = false){
 		$this->api = $api;
-		$this->limit = -1;
-		$this->selections = array();
+		$this->sessions = array();
 	}
 	
 	public function init(){
@@ -44,10 +44,10 @@ class WorldEditor implements Plugin{
 			"wand-item" => IRON_HOE,
 		));
 		$this->config = $this->api->plugin->readYAML($this->path."config.yml");
-		$this->limit = $this->config["block-limit"];
 		
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
-		$this->api->console->register("/", "WorldEditor commands", array($this, "command"));
+		$this->api->console->register("/", "WorldEditor commands.", array($this, "command"));
+		$this->api->console->register("toggleeditwand", "Toggles WorldEditor wand selection mode.", array($this, "command"));
 		$this->api->console->alias("/wand", "/");
 		$this->api->console->alias("/limit", "/");
 		$this->api->console->alias("/desel", "/");
@@ -66,11 +66,12 @@ class WorldEditor implements Plugin{
 		$output = "";
 		switch($event){
 			case "player.block.touch":
-				if($data["item"]->getID() == $this->config["wand-item"] and $this->api->ban->isOp($data["player"]->username)){
+				if($data["item"]->getID() == $this->config["wand-item"] and $this->api->ban->isOp($data["player"]->username) and $this->session($data["player"])["wand-usage"] === true){
+					$session =& $this->session($data["player"]);
 					if($data["type"] == "break"){
-						$this->setPosition1($data["player"], $data["target"], $output);
+						$this->setPosition1($session, $data["target"], $output);
 					}else{
-						$this->setPosition2($data["player"], $data["target"], $output);
+						$this->setPosition2($session, $data["target"], $output);
 					}
 					$this->api->chat->sendTo(false, $output, $data["player"]->username);
 					return false;
@@ -79,33 +80,38 @@ class WorldEditor implements Plugin{
 		}
 	}
 	
-	public function setPosition1($issuer, Vector3 $position, &$output){
-		if(!isset($this->selections[$issuer->username])){
-			$this->selections[$issuer->username] = array(false, false);
-		}		
-		$this->selections[$issuer->username][0] = array(round($position->x), round($position->y), round($position->z));
-		$count = $this->countBlocks($this->selections[$issuer->username]);
+	public function &session(Player $issuer){
+		if(!isset($this->sessions[$issuer->username])){
+			$this->sessions[$issuer->username] = array(
+				"selection" => array(false, false),
+				"block-limit" => $this->config["block-limit"],
+				"wand-usage" => true,
+			);
+		}
+		return $this->sessions[$issuer->username];
+	}
+	
+	public function setPosition1(&$session, Vector3 $position, &$output){
+		$session["selection"][0] = array(round($position->x), round($position->y), round($position->z));
+		$count = $this->countBlocks($session["selection"]);
 		if($count === false){
 			$count = "";
 		}else{
 			$count = " ($count)";
 		}
-		$output .= "First position set to (".$this->selections[$issuer->username][0][0].", ".$this->selections[$issuer->username][0][1].", ".$this->selections[$issuer->username][0][2].")$count.\n";
+		$output .= "First position set to (".$session["selection"][0][0].", ".$session["selection"][0][1].", ".$session["selection"][0][2].")$count.\n";
 		return true;
 	}
 	
-	public function setPosition2($issuer, Vector3 $position, &$output){
-		if(!isset($this->selections[$issuer->username])){
-			$this->selections[$issuer->username] = array(false, false);
-		}		
-		$this->selections[$issuer->username][1] = array(round($position->x), round($position->y), round($position->z));
-		$count = $this->countBlocks($this->selections[$issuer->username]);
+	public function setPosition2(&$session, Vector3 $position, &$output){
+		$session["selection"][1] = array(round($position->x), round($position->y), round($position->z));
+		$count = $this->countBlocks($session["selection"]);
 		if($count === false){
 			$count = "";
 		}else{
 			$count = " ($count)";
 		}
-		$output .= "Second position set to (".$this->selections[$issuer->username][1][0].", ".$this->selections[$issuer->username][1][1].", ".$this->selections[$issuer->username][1][2].")$count.\n";
+		$output .= "Second position set to (".$session["selection"][1][0].", ".$session["selection"][1][1].", ".$session["selection"][1][2].")$count.\n";
 		return true;
 	}
 	
@@ -116,10 +122,18 @@ class WorldEditor implements Plugin{
 		}
 		if($cmd{0} === "/"){
 			$cmd = substr($cmd, 1);
-		}else{
-			$output .= "Bad command\n";
 		}
+		
 		switch($cmd){
+			case "toggleeditwand":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				$session["wand-usage"] = $session["wand-usage"] == true ? false:true;
+				$output .= "Wand Item is now ".($session["wand-usage"] === true ? "enabled":"disabled").".\n";
+				break;
 			case "wand":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
@@ -140,40 +154,48 @@ class WorldEditor implements Plugin{
 					$output .= "Please run this command in-game.\n";
 					break;
 				}
-				unset($this->selections[$issuer->username]);
+				$session =& $this->session($issuer);
+				$session["selection"] = array(false, false);
 				$output = "Selection cleared.\n";
 				break;
 			case "limit":
-				if(!isset($params[0])){
+				if(!isset($params[0]) or trim($params[0]) === ""){
 					$output .= "Usage: //limit <limit>\n";
 					break;
 				}
 				$limit = intval($params[0]);
-				if($limit <= 0){
+				if($limit < 0){
 					$limit = -1;
 				}
 				if($this->config["block-limit"] > 0){
-					$this->limit = $limit === -1 ? $this->config["block-limit"]:min($this->config["block-limit"], $limit);
+					$limit = $limit === -1 ? $this->config["block-limit"]:min($this->config["block-limit"], $limit);
 				}
-				$output .= "Block limit set to ".($this->limit === -1 ? "infinite":$this->limit)." block(s).\n";
+				$this->session($issuer)["block-limit"] = $limit;
+				$output .= "Block limit set to ".($limit === -1 ? "infinite":$limit)." block(s).\n";
 				break;
 			case "pos1":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
 					break;
-				}				
-				$this->setPosition1($issuer, new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
+				}
+				$this->setPosition1($this->session($issuer), new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
 				break;
 			case "pos2":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
 					break;
 				}
-				$this->setPosition2($issuer, new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
+				$this->setPosition2($this->session($issuer), new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
 				break;
 			case "set":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				$count = $this->countBlocks($session["selection"]);
+				if($count > $session["block-limit"] and $session["block-limit"] > 0){
+					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to change $count block(s).\n";
 					break;
 				}
 				$items = BlockAPI::fromString($params[0], true);
@@ -183,11 +205,17 @@ class WorldEditor implements Plugin{
 						return $output;
 					}
 				}
-				$this->W_set($this->selections[$issuer->username], $items, $output);
+				$this->W_set($session["selection"], $items, $output);
 				break;
 			case "replace":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				$count = $this->countBlocks($session["selection"]);
+				if($count > $session["block-limit"] and $session["block-limit"] > 0){
+					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to change $count block(s).\n";
 					break;
 				}
 				$item1 = BlockAPI::fromString($params[0]);
@@ -203,7 +231,7 @@ class WorldEditor implements Plugin{
 					}
 				}
 				
-				$this->W_replace($this->selections[$issuer->username], $item1, $items2, $output);
+				$this->W_replace($session["selection"], $item1, $items2, $output);
 				break;
 			default:
 			case "help":
@@ -238,11 +266,7 @@ class WorldEditor implements Plugin{
 		$endY = max($selection[0][1], $selection[1][1]);
 		$startZ = min($selection[0][2], $selection[1][2]);
 		$endZ = max($selection[0][2], $selection[1][2]);
-		$count = ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
-		if($this->limit > 0 and $count > $this->limit){
-			$output .= "Block limit of ".$this->limit." exceeded, tried to change $count block(s).\n";
-			return false;
-		}
+		$count = $this->countBlocks($selection);
 		$output .= "$count block(s) have been changed.\n";
 		for($x = $startX; $x <= $endX; ++$x){
 			for($y = $startY; $y <= $endY; ++$y){
@@ -279,10 +303,6 @@ class WorldEditor implements Plugin{
 					$b = $this->api->block->getBlock(new Vector3($x, $y, $z));
 					if($b->getID() === $id1 and ($meta1 === false or $b->getMetadata() === $meta1)){
 						++$count;
-						if($this->limit > 0 and $count > $this->limit){
-							$output .= "Block limit of ".$this->limit." exceeded, tried to change $count block(s).\n";
-							return false;
-						}
 						$b2 = $blocks2[mt_rand(0, $bcnt2)];
 						$this->api->block->setBlock($b, $b2->getID(), $b2->getMetadata(), false); //WARNING!!! Temp. method until I redone chunk sending
 					}					
