@@ -21,7 +21,7 @@ Small Changelog
 - Alpha_1.3dev compatible release
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
-- Added //limit, //desel, //wand, /toggleeditwand
+- Added //limit, //desel, //wand, //sphere, //hsphere, /toggleeditwand
 - Separated selections for each player
 - In-game selection mode
 - Sessions
@@ -48,6 +48,8 @@ class WorldEditor implements Plugin{
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands.", array($this, "command"));
 		$this->api->console->register("toggleeditwand", "Toggles WorldEditor wand selection mode.", array($this, "command"));
+		$this->api->console->alias("/hsphere", "/");
+		$this->api->console->alias("/sphere", "/");
 		$this->api->console->alias("/wand", "/");
 		$this->api->console->alias("/limit", "/");
 		$this->api->console->alias("/desel", "/");
@@ -187,6 +189,34 @@ class WorldEditor implements Plugin{
 				}
 				$this->setPosition2($this->session($issuer), new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
 				break;
+
+			case "hsphere":
+				$filled = false;
+			case "sphere":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				if(!isset($filled)){
+					$filled = true;
+				}
+				if(!isset($params[1]) or $params[1] == ""){
+					$output .= "Usage: //$cmd <block> <radius>.\n";
+					break;
+				}
+				$radius = abs(floatval($params[1]));
+				
+				$session =& $this->session($issuer);
+				$items = BlockAPI::fromString($params[0], true);
+				
+				foreach($items as $item){
+					if($item->getID() > 0xff){
+						$output .= "Incorrect block.\n";
+						return $output;
+					}
+				}
+				$this->W_sphere(new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $items, $radius, $radius, $radius, $filled, $output);
+				break;
 			case "set":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
@@ -235,7 +265,7 @@ class WorldEditor implements Plugin{
 				break;
 			default:
 			case "help":
-				$output .= "Commands: //desel, //limit, //pos1, //pos2, //set, //replace, //help\n";
+				$output .= "Commands: //sphere, //hsphere, //desel, //limit, //pos1, //pos2, //set, //replace, //help, //wand, /toggleeditwand\n";
 				break;
 		}
 		return $output;
@@ -311,5 +341,95 @@ class WorldEditor implements Plugin{
 		}
 		$output .= "$count block(s) have been changed.\n";
 		return true;
+	}
+	
+	public static function lengthSq($x, $y, $z){
+		return ($x * $x) + ($y * $y) + ($z * $z);
+	}
+	
+	private function W_sphere(Vector3 $pos, $blocks, $radiusX, $radiusY, $radiusZ, $filled = true, &$output = null){
+		$count = 0;
+
+        $radiusX += 0.5;
+        $radiusY += 0.5;
+        $radiusZ += 0.5;
+
+        $invRadiusX = 1 / $radiusX;
+        $invRadiusY = 1 / $radiusY;
+        $invRadiusZ = 1 / $radiusZ;
+
+        $ceilRadiusX = (int) ceil($radiusX);
+        $ceilRadiusY = (int) ceil($radiusY);
+        $ceilRadiusZ = (int) ceil($radiusZ);
+
+		$bcnt = count($blocks) - 1;
+		
+        $nextXn = 0;
+		$breakX = false;
+		for($x = 0; $x <= $ceilRadiusX and $breakX === false; ++$x){
+			$xn = $nextXn;
+			$nextXn = ($x + 1) * $invRadiusX;
+			$nextYn = 0;
+			$breakY = false;
+			for($y = 0; $y <= $ceilRadiusY and $breakY === false; ++$y){
+				$yn = $nextYn;
+				$nextYn = ($y + 1) * $invRadiusY;
+				$nextZn = 0;
+				$breakZ = false;
+				for($z = 0; $z <= $ceilRadiusZ; ++$z){
+					$zn = $nextZn;
+					$nextZn = ($z + 1) * $invRadiusZ;
+					$distanceSq = WorldEditor::lengthSq($xn, $yn, $zn);
+					if($distanceSq > 1){
+						if($z === 0){
+							if($y === 0){
+								$breakX = true;
+								$breakY = true;
+								break;
+							}
+							$breakY = true;
+							break;
+						}
+						break;
+					}
+					
+					if($filled === false){						
+						if(WorldEditor::lengthSq($nextXn, $yn, $zn) <= 1 and WorldEditor::lengthSq($xn, $nextYn, $zn) <= 1 and WorldEditor::lengthSq($xn, $yn, $nextZn) <= 1){
+							continue;
+						}
+					}
+					
+					$count += 8;
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add($x, $y, $z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add(-$x, $y, $z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add($x, -$y, $z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add($x, $y, -$z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add(-$x, -$y, $z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add($x, -$y, -$z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add(-$x, $y, -$z), $b->getID(), $b->getMetadata(), false);
+					
+					$b = $blocks[mt_rand(0, $bcnt)];
+					$this->api->block->setBlock($pos->add(-$x, -$y, -$z), $b->getID(), $b->getMetadata(), false);
+					
+				}
+			}
+		}
+		
+		$output .= "$count block(s) have been changed.\n";
+		return true;	
 	}
 }
