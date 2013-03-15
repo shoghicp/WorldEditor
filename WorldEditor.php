@@ -302,7 +302,7 @@ class WorldEditor implements Plugin{
 			for($y = $startY; $y <= $endY; ++$y){
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock(new Vector3($x, $y, $z), $b->getID(), $b->getMetadata(), false); //WARNING!!! Temp. method until I redone chunk sending
+					$this->api->block->setBlock(new Vector3($x, $y, $z), $b->getID(), $b->getMetadata(), false);
 				}
 			}
 		}
@@ -334,7 +334,7 @@ class WorldEditor implements Plugin{
 					if($b->getID() === $id1 and ($meta1 === false or $b->getMetadata() === $meta1)){
 						++$count;
 						$b2 = $blocks2[mt_rand(0, $bcnt2)];
-						$this->api->block->setBlock($b, $b2->getID(), $b2->getMetadata(), false); //WARNING!!! Temp. method until I redone chunk sending
+						$this->api->block->setBlock($b, $b2->getID(), $b2->getMetadata(), false);
 					}					
 				}
 			}
