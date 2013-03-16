@@ -4,7 +4,7 @@
 __PocketMine Plugin__
 name=WorldEditor
 description=World Editor is a port of WorldEdit to PocketMine
-version=0.5dev
+version=0.5
 author=shoghicp
 class=WorldEditor
 apiversion=4
@@ -18,7 +18,7 @@ Small Changelog
 - Alpha_1.2 compatible release
 
 0.5:
-- Alpha_1.3dev compatible release
+- Alpha_1.2.1 compatible release
 - Added Multiple Block lists for //set
 - Added Multiple Block lists for replacement block //replace
 - Added //limit, //desel, //wand, //sphere, //hsphere, /toggleeditwand
