@@ -4,10 +4,10 @@
 __PocketMine Plugin__
 name=WorldEditor
 description=World Editor is a port of WorldEdit to PocketMine
-version=0.5
+version=0.7
 author=shoghicp
 class=WorldEditor
-apiversion=4
+apiversion=7
 */
 
 /* 
@@ -26,6 +26,11 @@ Small Changelog
 - In-game selection mode
 - Sessions
 
+0.6:
+- Alpha_1.3dev compatible release
+
+0.7:
+- Multiworld compatible release
 
 */
 
@@ -47,7 +52,7 @@ class WorldEditor implements Plugin{
 		
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands.", array($this, "command"));
-		$this->api->console->register("toggleeditwand", "Toggles WorldEditor wand selection mode.", array($this, "command"));
+		$this->api->console->register("toggleeditwand", "", array($this, "command"));
 		$this->api->console->alias("/hsphere", "/");
 		$this->api->console->alias("/sphere", "/");
 		$this->api->console->alias("/wand", "/");
@@ -93,8 +98,8 @@ class WorldEditor implements Plugin{
 		return $this->sessions[$issuer->username];
 	}
 	
-	public function setPosition1(&$session, Vector3 $position, &$output){
-		$session["selection"][0] = array(round($position->x), round($position->y), round($position->z));
+	public function setPosition1(&$session, Position $position, &$output){
+		$session["selection"][0] = array(round($position->x), round($position->y), round($position->z), $position->level);
 		$count = $this->countBlocks($session["selection"]);
 		if($count === false){
 			$count = "";
@@ -105,8 +110,8 @@ class WorldEditor implements Plugin{
 		return true;
 	}
 	
-	public function setPosition2(&$session, Vector3 $position, &$output){
-		$session["selection"][1] = array(round($position->x), round($position->y), round($position->z));
+	public function setPosition2(&$session, Position $position, &$output){
+		$session["selection"][1] = array(round($position->x), round($position->y), round($position->z), $position->level);
 		$count = $this->countBlocks($session["selection"]);
 		if($count === false){
 			$count = "";
@@ -147,7 +152,7 @@ class WorldEditor implements Plugin{
 				}elseif($issuer->gamemode === CREATIVE){
 					$output .= "You are on creative mode.\n";
 				}else{
-					$this->api->block->drop(new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), BlockAPI::getItem($this->config["wand-item"]));
+					$this->api->entity->drop(new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), BlockAPI::getItem($this->config["wand-item"]));
 				}
 				$output .= "Break a block to set the #1 position, place for the #1.\n";
 				break;
@@ -180,14 +185,14 @@ class WorldEditor implements Plugin{
 					$output .= "Please run this command in-game.\n";
 					break;
 				}
-				$this->setPosition1($this->session($issuer), new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
+				$this->setPosition1($this->session($issuer), new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), $output);
 				break;
 			case "pos2":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
 					break;
 				}
-				$this->setPosition2($this->session($issuer), new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $output);
+				$this->setPosition2($this->session($issuer), new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), $output);
 				break;
 
 			case "hsphere":
@@ -215,7 +220,7 @@ class WorldEditor implements Plugin{
 						return $output;
 					}
 				}
-				$this->W_sphere(new Vector3($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5), $items, $radius, $radius, $radius, $filled, $output);
+				$this->W_sphere(new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), $items, $radius, $radius, $radius, $filled, $output);
 				break;
 			case "set":
 				if(!($issuer instanceof Player)){					
@@ -272,9 +277,9 @@ class WorldEditor implements Plugin{
 	}
 	
 	private function countBlocks($selection){
-		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
 			return false;
-		}	
+		}
 		$startX = min($selection[0][0], $selection[1][0]);
 		$endX = max($selection[0][0], $selection[1][0]);
 		$startY = min($selection[0][1], $selection[1][1]);
@@ -285,11 +290,17 @@ class WorldEditor implements Plugin{
 	}
 	
 	private function W_set($selection, $blocks, &$output = null){
-		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
-			$output .= "Make a selection first\n";
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
+			$output .= "Make a selection first.\n";
 			return false;
 		}
+		$level = $selection[0][3];
 		$bcnt = count($blocks) - 1;
+		$bcnt2 = count($blocks2) - 1;
+		if($bcnt < 0){
+			$output .= "Incorrect blocks.\n";
+			return false;
+		}
 		$startX = min($selection[0][0], $selection[1][0]);
 		$endX = max($selection[0][0], $selection[1][0]);
 		$startY = min($selection[0][1], $selection[1][1]);
@@ -302,7 +313,7 @@ class WorldEditor implements Plugin{
 			for($y = $startY; $y <= $endY; ++$y){
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock(new Vector3($x, $y, $z), $b->getID(), $b->getMetadata(), false);
+					$level->setBlock(new Vector3($x, $y, $z), $b->getBlock(), false);
 				}
 			}
 		}
@@ -310,15 +321,20 @@ class WorldEditor implements Plugin{
 	}
 	
 	private function W_replace($selection, Item $block1, $blocks2, &$output = null){
-		if(!is_array($selection) or $selection[0] === false or $selection[1] === false){
-			$output .= "Make a selection first\n";
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
+			$output .= "Make a selection first.\n";
 			return false;
 		}
 		
+		$level = $selection[0][3];
 		$id1 = $block1->getID();
 		$meta1 = $block1->getMetadata();
 		
 		$bcnt2 = count($blocks2) - 1;
+		if($bcnt2 < 0){
+			$output .= "Incorrect blocks.\n";
+			return false;
+		}
 		
 		$startX = min($selection[0][0], $selection[1][0]);
 		$endX = max($selection[0][0], $selection[1][0]);
@@ -330,11 +346,10 @@ class WorldEditor implements Plugin{
 		for($x = $startX; $x <= $endX; ++$x){
 			for($y = $startY; $y <= $endY; ++$y){
 				for($z = $startZ; $z <= $endZ; ++$z){
-					$b = $this->api->block->getBlock(new Vector3($x, $y, $z));
+					$b = $level->getBlock(new Vector3($x, $y, $z));
 					if($b->getID() === $id1 and ($meta1 === false or $b->getMetadata() === $meta1)){
 						++$count;
-						$b2 = $blocks2[mt_rand(0, $bcnt2)];
-						$this->api->block->setBlock($b, $b2->getID(), $b2->getMetadata(), false);
+						$level->setBlock($b, $blocks2[mt_rand(0, $bcnt2)]->getBlock(), false);
 					}					
 				}
 			}
@@ -347,7 +362,7 @@ class WorldEditor implements Plugin{
 		return ($x * $x) + ($y * $y) + ($z * $z);
 	}
 	
-	private function W_sphere(Vector3 $pos, $blocks, $radiusX, $radiusY, $radiusZ, $filled = true, &$output = null){
+	private function W_sphere(Position $pos, $blocks, $radiusX, $radiusY, $radiusZ, $filled = true, &$output = null){
 		$count = 0;
 
         $radiusX += 0.5;
@@ -401,29 +416,15 @@ class WorldEditor implements Plugin{
 					
 					$count += 8;
 					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add($x, $y, $z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add(-$x, $y, $z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add($x, -$y, $z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add($x, $y, -$z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add(-$x, -$y, $z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add($x, -$y, -$z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add(-$x, $y, -$z), $b->getID(), $b->getMetadata(), false);
-					
-					$b = $blocks[mt_rand(0, $bcnt)];
-					$this->api->block->setBlock($pos->add(-$x, -$y, -$z), $b->getID(), $b->getMetadata(), false);
+
+					$pos->level->setBlock($pos->add($x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add(-$x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add($x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add($x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add(-$x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add($x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add(-$x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$pos->level->setBlock($pos->add(-$x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
 					
 				}
 			}
