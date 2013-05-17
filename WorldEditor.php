@@ -31,6 +31,7 @@ Small Changelog
 
 0.7:
 - Multiworld compatible release
+- Added correct block counts
 
 */
 
@@ -307,16 +308,16 @@ class WorldEditor implements Plugin{
 		$endY = max($selection[0][1], $selection[1][1]);
 		$startZ = min($selection[0][2], $selection[1][2]);
 		$endZ = max($selection[0][2], $selection[1][2]);
-		$count = $this->countBlocks($selection);
-		$output .= "$count block(s) have been changed.\n";
+		$count = 0; //$count = $this->countBlocks($selection);
 		for($x = $startX; $x <= $endX; ++$x){
 			for($y = $startY; $y <= $endY; ++$y){
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $blocks[mt_rand(0, $bcnt)];
-					$level->setBlock(new Vector3($x, $y, $z), $b->getBlock(), false);
+					$count += (int) $level->setBlock(new Vector3($x, $y, $z), $b->getBlock(), false);
 				}
 			}
 		}
+		$output .= "$count block(s) have been changed.\n";
 		return true;
 	}
 	
@@ -348,8 +349,7 @@ class WorldEditor implements Plugin{
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
 					if($b->getID() === $id1 and ($meta1 === false or $b->getMetadata() === $meta1)){
-						++$count;
-						$level->setBlock($b, $blocks2[mt_rand(0, $bcnt2)]->getBlock(), false);
+						$count += (int) $level->setBlock($b, $blocks2[mt_rand(0, $bcnt2)]->getBlock(), false);
 					}					
 				}
 			}
@@ -412,19 +412,16 @@ class WorldEditor implements Plugin{
 						if(WorldEditor::lengthSq($nextXn, $yn, $zn) <= 1 and WorldEditor::lengthSq($xn, $nextYn, $zn) <= 1 and WorldEditor::lengthSq($xn, $yn, $nextZn) <= 1){
 							continue;
 						}
-					}
-					
-					$count += 8;
-					
+					}					
 
-					$pos->level->setBlock($pos->add($x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add(-$x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add($x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add($x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add(-$x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add($x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add(-$x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$pos->level->setBlock($pos->add(-$x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add($x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add(-$x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add($x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add($x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add(-$x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add($x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add(-$x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlock($pos->add(-$x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
 					
 				}
 			}
