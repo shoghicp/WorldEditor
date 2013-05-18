@@ -45,11 +45,11 @@ class WorldEditor implements Plugin{
 	}
 	
 	public function init(){
-		$this->path = $this->api->plugin->createConfig($this, array(
+		$this->path = $this->api->plugin->configPath($this);
+		$this->config = new Config($this->path."config.yml", CONFIG_YAML, array(
 			"block-limit" => -1,
 			"wand-item" => IRON_HOE,
 		));
-		$this->config = $this->api->plugin->readYAML($this->path."config.yml");
 		
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands.", array($this, "command"));
@@ -74,7 +74,7 @@ class WorldEditor implements Plugin{
 		$output = "";
 		switch($event){
 			case "player.block.touch":
-				if($data["item"]->getID() == $this->config["wand-item"] and $this->api->ban->isOp($data["player"]->username) and $this->session($data["player"])["wand-usage"] === true){
+				if($data["item"]->getID() == $this->config->get("wand-item") and $this->api->ban->isOp($data["player"]->username) and $this->session($data["player"])["wand-usage"] === true){
 					$session =& $this->session($data["player"]);
 					if($data["type"] == "break"){
 						$this->setPosition1($session, $data["target"], $output);
@@ -92,7 +92,7 @@ class WorldEditor implements Plugin{
 		if(!isset($this->sessions[$issuer->username])){
 			$this->sessions[$issuer->username] = array(
 				"selection" => array(false, false),
-				"block-limit" => $this->config["block-limit"],
+				"block-limit" => $this->config->get("block-limit"),
 				"wand-usage" => true,
 			);
 		}
@@ -147,13 +147,13 @@ class WorldEditor implements Plugin{
 					$output .= "Please run this command in-game.\n";
 					break;
 				}
-				if($issuer->hasItem($this->config["wand-item"])){
+				if($issuer->hasItem($this->config->get("wand-item"))){
 					$output .= "You already have the wand item.\n";
 					break;
 				}elseif($issuer->gamemode === CREATIVE){
 					$output .= "You are on creative mode.\n";
 				}else{
-					$this->api->entity->drop(new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), BlockAPI::getItem($this->config["wand-item"]));
+					$this->api->entity->drop(new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), BlockAPI::getItem($this->config->get("wand-item")));
 				}
 				$output .= "Break a block to set the #1 position, place for the #1.\n";
 				break;
@@ -175,8 +175,8 @@ class WorldEditor implements Plugin{
 				if($limit < 0){
 					$limit = -1;
 				}
-				if($this->config["block-limit"] > 0){
-					$limit = $limit === -1 ? $this->config["block-limit"]:min($this->config["block-limit"], $limit);
+				if($this->config->get("block-limit") > 0){
+					$limit = $limit === -1 ? $this->config->get("block-limit"):min($this->config->get("block-limit"), $limit);
 				}
 				$this->session($issuer)["block-limit"] = $limit;
 				$output .= "Block limit set to ".($limit === -1 ? "infinite":$limit)." block(s).\n";
