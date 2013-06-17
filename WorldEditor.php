@@ -4,7 +4,7 @@
 __PocketMine Plugin__
 name=WorldEditor
 description=World Editor is a port of WorldEdit to PocketMine
-version=0.7
+version=0.8
 author=shoghicp
 class=WorldEditor
 apiversion=7,8,9
@@ -33,6 +33,9 @@ Small Changelog
 - Multiworld compatible release
 - Added correct block counts
 
+0.8:
+- Added //copy, //paste, //cut
+
 */
 
 
@@ -54,6 +57,9 @@ class WorldEditor implements Plugin{
 		$this->api->addHandler("player.block.touch", array($this, "selectionHandler"), 15);
 		$this->api->console->register("/", "WorldEditor commands.", array($this, "command"));
 		$this->api->console->register("toggleeditwand", "", array($this, "command"));
+		$this->api->console->alias("/copy", "/");
+		$this->api->console->alias("/cut", "/");
+		$this->api->console->alias("/paste", "/");
 		$this->api->console->alias("/hsphere", "/");
 		$this->api->console->alias("/sphere", "/");
 		$this->api->console->alias("/wand", "/");
@@ -92,6 +98,7 @@ class WorldEditor implements Plugin{
 		if(!isset($this->sessions[$issuer->username])){
 			$this->sessions[$issuer->username] = array(
 				"selection" => array(false, false),
+				"clipboard" => false,
 				"block-limit" => $this->config->get("block-limit"),
 				"wand-usage" => true,
 			);
@@ -133,6 +140,51 @@ class WorldEditor implements Plugin{
 		}
 		
 		switch($cmd){
+			case "paste":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				
+				$this->W_paste($session["clipboard"], $issuer->entity, $output);
+				break;
+			case "copy":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				$count = $this->countBlocks($session["selection"], $startX, $startY, $startZ);
+				if($count > $session["block-limit"] and $session["block-limit"] > 0){
+					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to copy $count block(s).\n";
+					break;
+				}
+				
+				$blocks = $this->W_copy($session["selection"], $output);
+				if(count($blocks) > 0){
+					$offset = array($startX - $issuer->entity->x - 0.5, $startY - $issuer->entity->y, $startZ - $issuer->entity->z - 0.5);
+					$session["clipboard"] = array($offset, $blocks);
+				}
+				break;
+			case "cut":
+				if(!($issuer instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					break;
+				}
+				$session =& $this->session($issuer);
+				$count = $this->countBlocks($session["selection"], $startX, $startY, $startZ);
+				if($count > $session["block-limit"] and $session["block-limit"] > 0){
+					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to cut $count block(s).\n";
+					break;
+				}
+				
+				$blocks = $this->W_cut($session["selection"], $output);
+				if(count($blocks) > 0){
+					$offset = array($startX - $issuer->entity->x - 0.5, $startY - $issuer->entity->y, $startZ - $issuer->entity->z - 0.5);
+					$session["clipboard"] = array($offset, $blocks);
+				}
+				break;
 			case "toggleeditwand":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
@@ -277,7 +329,7 @@ class WorldEditor implements Plugin{
 		return $output;
 	}
 	
-	private function countBlocks($selection){
+	private function countBlocks($selection, &$startX = null, &$startY = null, &$startZ = null){
 		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
 			return false;
 		}
@@ -288,6 +340,89 @@ class WorldEditor implements Plugin{
 		$startZ = min($selection[0][2], $selection[1][2]);
 		$endZ = max($selection[0][2], $selection[1][2]);
 		return ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
+	}
+
+	private function W_paste($clipboard, Position $pos, &$output = null){
+		if(count($clipboard) !== 2){
+			$output .= "Copy something first.\n";
+			return false;
+		}
+		$clipboard[0][0] += $pos->x - 0.5;
+		$clipboard[0][1] += $pos->y;
+		$clipboard[0][2] += $pos->z - 0.5;
+		$offset = array_map("round", $clipboard[0]);
+		$count = 0;
+		
+		foreach($clipboard[1] as $x => $i){
+			foreach($i as $y => $j){
+				foreach($j as $z => $block){
+					$b = BlockAPI::get(ord($block{0}), ord($block{1}));
+					$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+				}
+			}
+		}
+		$output .= "$count block(s) have been changed.\n";
+		return true;
+	}
+	
+	private function W_copy($selection, &$output = null){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
+			$output .= "Make a selection first.\n";
+			return array();
+		}
+		$level = $selection[0][3];
+		
+		$blocks = array();
+		$startX = min($selection[0][0], $selection[1][0]);
+		$endX = max($selection[0][0], $selection[1][0]);
+		$startY = min($selection[0][1], $selection[1][1]);
+		$endY = max($selection[0][1], $selection[1][1]);
+		$startZ = min($selection[0][2], $selection[1][2]);
+		$endZ = max($selection[0][2], $selection[1][2]);
+		$count = $this->countBlocks($selection);
+		for($x = $startX; $x <= $endX; ++$x){
+			$blocks[$x - $startX] = array();
+			for($y = $startY; $y <= $endY; ++$y){
+				$blocks[$x - $startX][$y - $startY] = array();
+				for($z = $startZ; $z <= $endZ; ++$z){
+					$b = $level->getBlock(new Vector3($x, $y, $z));
+					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getMetadata());
+				}
+			}
+		}
+		$output .= "$count block(s) have been copied.\n";
+		return $blocks;
+	}
+	
+	private function W_cut($selection, &$output = null){
+		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
+			$output .= "Make a selection first.\n";
+			return array();
+		}
+		$level = $selection[0][3];
+		
+		$blocks = array();
+		$startX = min($selection[0][0], $selection[1][0]);
+		$endX = max($selection[0][0], $selection[1][0]);
+		$startY = min($selection[0][1], $selection[1][1]);
+		$endY = max($selection[0][1], $selection[1][1]);
+		$startZ = min($selection[0][2], $selection[1][2]);
+		$endZ = max($selection[0][2], $selection[1][2]);
+		$count = $this->countBlocks($selection);
+		$air = new AirBlock();
+		for($x = $startX; $x <= $endX; ++$x){
+			$blocks[$x - $startX] = array();
+			for($y = $startY; $y <= $endY; ++$y){
+				$blocks[$x - $startX][$y - $startY] = array();
+				for($z = $startZ; $z <= $endZ; ++$z){
+					$b = $level->getBlock(new Vector3($x, $y, $z));
+					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getMetadata());
+					$level->setBlock(new Vector3($x, $y, $z), $air, false);
+				}
+			}
+		}
+		$output .= "$count block(s) have been cut.\n";
+		return $blocks;
 	}
 	
 	private function W_set($selection, $blocks, &$output = null){
