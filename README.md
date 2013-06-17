@@ -20,7 +20,7 @@ WorldEditor Plugin is a port of the WorldEdit, done for [PocketMine-MP](https://
 | __//copy__ | | Copies the currently selected region. Be aware that it stores your position relative to the selection when copying. |
 | __//cut__ | | Cuts the currently selected region. |
 | __//paste__ | | Pastes the clipboard. |
-| __//sphere__ | | `<blocks> <radius>` | Create a sphere. |
-| __//hsphere__ | | `<blocks> <radius>` | Create a hollow sphere. |
+| __//sphere__ | `<blocks> <radius>` | Create a sphere. |
+| __//hsphere__ | `<blocks> <radius>` | Create a hollow sphere. |
 | __//desel__ | | Deselects the current selection. |
 | __/toggleeditwand__ | | Toggles the edit wand selection mode, allowing you to use the edit wand item normally. |
