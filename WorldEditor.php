@@ -323,7 +323,7 @@ class WorldEditor implements Plugin{
 				break;
 			default:
 			case "help":
-				$output .= "Commands: //sphere, //hsphere, //desel, //limit, //pos1, //pos2, //set, //replace, //help, //wand, /toggleeditwand\n";
+				$output .= "Commands: //cut, //copy, //paste, //sphere, //hsphere, //desel, //limit, //pos1, //pos2, //set, //replace, //help, //wand, /toggleeditwand\n";
 				break;
 		}
 		return $output;
@@ -357,7 +357,8 @@ class WorldEditor implements Plugin{
 			foreach($i as $y => $j){
 				foreach($j as $z => $block){
 					$b = BlockAPI::get(ord($block{0}), ord($block{1}));
-					$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+					$count += (int) $pos->level->setBlockRaw(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+					unset($b);
 				}
 			}
 		}
@@ -387,6 +388,7 @@ class WorldEditor implements Plugin{
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
 					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getMetadata());
+					unset($b);
 				}
 			}
 		}
@@ -398,6 +400,12 @@ class WorldEditor implements Plugin{
 		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
 			$output .= "Make a selection first.\n";
 			return array();
+		}
+		$totalCount = $this->countBlocks($selection);
+		if($totalCount > 524288){
+			$send = false;
+		}else{
+			$send = true;
 		}
 		$level = $selection[0][3];
 		
@@ -417,7 +425,21 @@ class WorldEditor implements Plugin{
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
 					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getMetadata());
-					$level->setBlock(new Vector3($x, $y, $z), $air, false);
+					$level->setBlockRaw(new Vector3($x, $y, $z), $air, false, $send);
+					unset($b);
+				}
+			}
+		}
+		if($send === false){
+			$forceSend = function($X, $Y, $Z){
+				$this->changedCount[$X.":".$Y.":".$Z] = 4096;
+			};			
+			$forceSend->bindTo($level, $level);
+			for($X = $startX >> 4; $X <= ($endX >> 4); ++$X){
+				for($Y = $startY >> 4; $Y <= ($endY >> 4); ++$Y){
+					for($Z = $startZ >> 4; $Z <= ($endZ >> 4); ++$Z){
+						$forceSend($X,$Y,$Z);
+					}
 				}
 			}
 		}
@@ -429,6 +451,12 @@ class WorldEditor implements Plugin{
 		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
 			$output .= "Make a selection first.\n";
 			return false;
+		}
+		$totalCount = $this->countBlocks($selection);
+		if($totalCount > 524288){
+			$send = false;
+		}else{
+			$send = true;
 		}
 		$level = $selection[0][3];
 		$bcnt = count($blocks) - 1;
@@ -448,7 +476,20 @@ class WorldEditor implements Plugin{
 			for($y = $startY; $y <= $endY; ++$y){
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $blocks[mt_rand(0, $bcnt)];
-					$count += (int) $level->setBlock(new Vector3($x, $y, $z), $b->getBlock(), false);
+					$count += (int) $level->setBlockRaw(new Vector3($x, $y, $z), $b->getBlock(), false, $send);
+				}
+			}
+		}
+		if($send === false){
+			$forceSend = function($X, $Y, $Z){
+				$this->changedCount[$X.":".$Y.":".$Z] = 4096;
+			};			
+			$forceSend->bindTo($level, $level);
+			for($X = $startX >> 4; $X <= ($endX >> 4); ++$X){
+				for($Y = $startY >> 4; $Y <= ($endY >> 4); ++$Y){
+					for($Z = $startZ >> 4; $Z <= ($endZ >> 4); ++$Z){
+						$forceSend($X,$Y,$Z);
+					}
 				}
 			}
 		}
@@ -462,6 +503,12 @@ class WorldEditor implements Plugin{
 			return false;
 		}
 		
+		$totalCount = $this->countBlocks($selection);
+		if($totalCount > 524288){
+			$send = false;
+		}else{
+			$send = true;
+		}
 		$level = $selection[0][3];
 		$id1 = $block1->getID();
 		$meta1 = $block1->getMetadata();
@@ -484,8 +531,22 @@ class WorldEditor implements Plugin{
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
 					if($b->getID() === $id1 and ($meta1 === false or $b->getMetadata() === $meta1)){
-						$count += (int) $level->setBlock($b, $blocks2[mt_rand(0, $bcnt2)]->getBlock(), false);
-					}					
+						$count += (int) $level->setBlockRaw($b, $blocks2[mt_rand(0, $bcnt2)]->getBlock(), false, $send);
+					}
+					unset($b);
+				}
+			}
+		}
+		if($send === false){
+			$forceSend = function($X, $Y, $Z){
+				$this->changedCount[$X.":".$Y.":".$Z] = 4096;
+			};			
+			$forceSend->bindTo($level, $level);
+			for($X = $startX >> 4; $X <= ($endX >> 4); ++$X){
+				for($Y = $startY >> 4; $Y <= ($endY >> 4); ++$Y){
+					for($Z = $startZ >> 4; $Z <= ($endZ >> 4); ++$Z){
+						$forceSend($X,$Y,$Z);
+					}
 				}
 			}
 		}
@@ -549,14 +610,14 @@ class WorldEditor implements Plugin{
 						}
 					}					
 
-					$count += (int) $pos->level->setBlock($pos->add($x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add(-$x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add($x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add($x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add(-$x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add($x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add(-$x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
-					$count += (int) $pos->level->setBlock($pos->add(-$x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add($x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add(-$x, $y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add($x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add($x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add(-$x, -$y, $z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add($x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add(-$x, $y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
+					$count += (int) $pos->level->setBlockRaw($pos->add(-$x, -$y, -$z), $blocks[mt_rand(0, $bcnt)]->getBlock(), false);
 					
 				}
 			}
