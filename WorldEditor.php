@@ -4,7 +4,7 @@
 __PocketMine Plugin__
 name=WorldEditor
 description=World Editor is a port of WorldEdit to PocketMine
-version=0.8
+version=0.9
 author=shoghicp
 class=WorldEditor
 apiversion=7,8,9,10
@@ -35,6 +35,9 @@ Small Changelog
 
 0.8:
 - Added //copy, //paste, //cut
+
+0.9:
+- Improved memory consumption on big changes
 
 */
 
