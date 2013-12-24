@@ -7,7 +7,7 @@ description=World Editor is a port of WorldEdit to PocketMine
 version=0.9
 author=shoghicp
 class=WorldEditor
-apiversion=7,8,9,10
+apiversion=7,8,9,10,11
 */
 
 /* 
