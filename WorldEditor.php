@@ -312,6 +312,12 @@ class WorldEditor implements Plugin{
 					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to change $count block(s).\n";
 					break;
 				}
+				$splited = explode(":", $params[0]);
+				if(count($splited) === 2 and is_numeric($splited[0]) and $splited[1] === "*"]){
+					for($submeta = 0; $submeta < 16; $submeta++)
+						$output .= $this->command("/", array($splited[0].":$submeta ".$splited[1]), $issuer, "/replace")
+					break;
+				}
 				$item1 = BlockAPI::fromString($params[0]);
 				if($item1->getID() > 0xff){
 					$output .= "Incorrect target block.\n";
